@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端调试页面</title>
+    <!-- 引入layui -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/layui@2.9.8/dist/css/layui.css">
+    <script src="https://cdn.jsdelivr.net/npm/layui@2.9.8/dist/layui.js"></script>
+    <style>
+        body {
+            padding: 20px;
+        }
+        .debug-info {
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+        .debug-btn {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>前端调试页面</h1>
+    
+    <div class="debug-info">
+        <h3>调试信息：</h3>
+        <div id="debug-output"></div>
+    </div>
+    
+    <div>
+        <h3>测试表单：</h3>
+        <form class="layui-form" id="testForm">
+            <div class="layui-form-item">
+                <label class="layui-form-label">关键字</label>
+                <div class="layui-input-block">
+                    <input type="text" name="keyword" value="宜宾" lay-verify="required" placeholder="请输入关键字" autocomplete="off" class="layui-input">
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <label class="layui-form-label">页码</label>
+                <div class="layui-input-block">
+                    <input type="number" name="page" value="1" min="1" placeholder="页码" autocomplete="off" class="layui-input">
+                </div>
+            </div>
+            <div class="layui-form-item">
+                <div class="layui-input-block">
+                    <button class="layui-btn debug-btn" lay-submit lay-filter="testScrape">测试抓取</button>
+                    <button type="button" class="layui-btn layui-btn-primary debug-btn" id="checkLogin">检查登录状态</button>
+                    <button type="button" class="layui-btn layui-btn-primary debug-btn" id="checkJquery">检查jQuery</button>
+                </div>
+            </div>
+        </form>
+    </div>
+    
+    <div id="test-results" style="margin-top: 20px;"></div>
+
+    <script>
+        // 页面加载完成后执行
+        layui.use(['form', 'layer', 'jquery'], function() {
+            var form = layui.form;
+            var layer = layui.layer;
+            var $ = layui.jquery;
+            
+            // 输出调试信息
+            function log(message) {
+                var now = new Date();
+                var timeStr = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+                $('#debug-output').append('<p>[' + timeStr + '] ' + message + '</p>');
+                console.log(message);
+            }
+            
+            log('页面加载完成，Layui初始化成功');
+            
+            // 检查jQuery
+            $('#checkJquery').click(function() {
+                if ($) {
+                    log('✓ jQuery可用，版本：' + $.fn.jquery);
+                    layer.msg('jQuery可用', {icon: 1});
+                } else {
+                    log('✗ jQuery不可用');
+                    layer.msg('jQuery不可用', {icon: 5});
+                }
+            });
+            
+            // 检查登录状态
+            $('#checkLogin').click(function() {
+                log('检查登录状态...');
+                $.ajax({
+                    url: '/',
+                    type: 'GET',
+                    success: function(response) {
+                        if (response.indexOf('登录') > -1) {
+                            log('✗ 当前未登录');
+                            layer.msg('未登录，请先登录', {icon: 5});
+                        } else {
+                            log('✓ 当前已登录');
+                            layer.msg('已登录', {icon: 1});
+                        }
+                    },
+                    error: function() {
+                        log('✗ 检查登录状态失败');
+                        layer.msg('检查失败', {icon: 5});
+                    }
+                });
+            });
+            
+            // 测试抓取
+            form.on('submit(testScrape)', function(data) {
+                log('表单提交，数据：' + JSON.stringify(data.field));
+                
+                layer.load(2);
+                
+                $.ajax({
+                    url: '/api/scrape',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(data.field),
+                    success: function(result) {
+                        layer.closeAll('loading');
+                        log('API响应：' + JSON.stringify(result));
+                        
+                        if (result.success) {
+                            layer.msg('抓取成功，共' + result.data.length + '条数据', {icon: 1});
+                            
+                            var html = '<h4>抓取结果：</h4>';
+                            html += '<p>关键字：' + result.keyword + '</p>';
+                            html += '<p>页码：' + result.page + '</p>';
+                            html += '<p>结果数量：' + result.data.length + '</p>';
+                            html += '<ul>';
+                            
+                            for (var i = 0; i < Math.min(3, result.data.length); i++) {
+                                var item = result.data[i];
+                                html += '<li>标题：' + item.title + '</li>';
+                            }
+                            
+                            html += '</ul>';
+                            $('#test-results').html(html);
+                        } else {
+                            layer.msg('抓取失败：' + result.error, {icon: 5});
+                            log('抓取失败：' + result.error);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        layer.closeAll('loading');
+                        log('AJAX错误：' + error);
+                        log('状态：' + status);
+                        log('响应：' + xhr.responseText);
+                        layer.msg('请求失败：' + error, {icon: 5});
+                    }
+                });
+                
+                return false;
+            });
+            
+            // 初始检查
+            log('执行初始检查...');
+            if ($) {
+                log('✓ 页面jQuery可用，版本：' + $.fn.jquery);
+            } else {
+                log('✗ 页面jQuery不可用');
+            }
+        });
+    </script>
+</body>
+</html>
